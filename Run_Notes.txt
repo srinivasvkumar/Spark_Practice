@@ -1,0 +1,12 @@
+
+
+1) run the script
+spark-submit Benchmark_parquet_delta.py
+
+2) after successful run, start history server manually
+/opt/spark/sbin/start-history-server.sh
+
+
+3) then access local host
+
+http://localhost:18080
