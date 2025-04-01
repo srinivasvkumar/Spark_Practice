@@ -1,0 +1,67 @@
+**Tungsten Project Demo in Apache Spark**
+
+## **Introduction**
+The **Tungsten Project** is an optimization engine in Apache Spark designed to enhance performance through better memory management, code generation, and query execution optimizations. This demo showcases Tungsten’s impact on Spark’s execution efficiency.
+
+## **Setup Spark Session**
+To begin, we need to initialize a Spark session with a reduced number of shuffle partitions for efficiency:
+
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
+
+spark = SparkSession.builder \
+    .appName("TungstenDemo") \
+    .config("spark.sql.shuffle.partitions", "4") \
+    .getOrCreate()
+```
+
+## **Create a Large DataFrame**
+We generate a large dataset containing random numbers to compare performance differences.
+
+```python
+import random
+from pyspark.sql.types import IntegerType
+
+# Generate sample data
+data = [(random.randint(1, 100), random.randint(1, 100)) for _ in range(10_000_000)]
+df = spark.createDataFrame(data, ["col1", "col2"])
+
+df.show(5)
+```
+
+## **Enable and Disable Whole-Stage Code Generation**
+We compare the execution performance of Spark with and without **Whole-Stage Code Generation (WSCG)**, a core component of Tungsten optimizations.
+
+### **Execution with Tungsten Optimizations (WSCG Enabled)**
+```python
+import time
+
+start_time = time.time()
+df.groupBy("col1").sum("col2").show()
+print(f"Execution time with WSCG: {time.time() - start_time:.2f} seconds")
+```
+
+### **Execution Without Tungsten Optimizations (WSCG Disabled)**
+```python
+spark.conf.set("spark.sql.codegen.wholeStage", "false")
+
+start_time = time.time()
+df.groupBy("col1").sum("col2").show()
+print(f"Execution time without WSCG: {time.time() - start_time:.2f} seconds")
+```
+
+## **Compare Execution Plans**
+To analyze Spark’s execution plans with and without optimizations, use the following command:
+
+```python
+df.groupBy("col1").sum("col2").explain(True)
+```
+
+## **Expected Outcome**
+- With Tungsten optimizations, Spark **vectorizes execution**, reduces JVM object overhead, and achieves faster query execution.
+- Without Tungsten, Spark **relies on traditional JVM execution**, resulting in higher object serialization/deserialization costs and slower performance.
+
+## **Conclusion**
+The Tungsten Project significantly improves Spark’s performance by leveraging **whole-stage code generation**, **binary processing**, and **efficient memory layouts**. This demo highlights the tangible benefits of these optimizations in large-scale data processing.
+

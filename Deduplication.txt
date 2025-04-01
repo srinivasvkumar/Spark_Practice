@@ -1,0 +1,56 @@
+# Streaming Deduplication in PySpark
+
+## Overview
+Streaming deduplication in PySpark is useful for removing duplicate records in real-time data streams. PySpark Structured Streaming provides mechanisms to eliminate duplicates efficiently based on specific criteria.
+
+## Approaches for Deduplication
+1. **Using dropDuplicates()**: Removes duplicates based on specified columns.
+2. **Using Watermarking**: Helps maintain deduplication over a specific event-time window.
+
+## Implementation of Streaming Deduplication
+
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
+from pyspark.sql.types import StructType, StructField, StringType, TimestampType
+
+# Initialize Spark Session
+spark = SparkSession.builder.appName("StreamingDeduplication").getOrCreate()
+
+# Define schema for incoming data
+df_schema = StructType([
+    StructField("timestamp", TimestampType(), True),
+    StructField("id", StringType(), True),
+    StructField("event", StringType(), True)
+])
+
+# Read streaming data from a source (Example: Socket)
+streaming_df = spark.readStream.format("socket").option("host", "localhost").option("port", 9999).load()
+
+# Parse the incoming data
+parsed_df = streaming_df.selectExpr("CAST(value AS STRING)").selectExpr(
+    "split(value, ',')[0] AS timestamp",
+    "split(value, ',')[1] AS id",
+    "split(value, ',')[2] AS event"
+).withColumn("timestamp", col("timestamp").cast(TimestampType()))
+
+# Deduplicate based on id and event
+unique_df = parsed_df.dropDuplicates(["id", "event"])
+
+# Alternatively, deduplicate using watermarking (for event-time deduplication)
+deduplicated_df = parsed_df.withWatermark("timestamp", "10 minutes").dropDuplicates(["id", "event"])
+
+# Write the deduplicated data to console
+query = deduplicated_df.writeStream.outputMode("append").format("console").start()
+
+query.awaitTermination()
+```
+
+## Explanation
+- **dropDuplicates()**: Ensures only unique records (based on `id` and `event`) are retained.
+- **Watermarking**: Limits deduplication to a **10-minute window**, preventing unbounded state growth.
+- **Streaming Source**: Reads real-time data from a socket.
+- **Output Mode**: `append` ensures only new, deduplicated records appear in the output.
+
+This method can be adapted for deduplicating data from sources like Kafka, files, or databases.
+

@@ -1,0 +1,74 @@
+# Stream-Stream Joins in PySpark
+
+## Overview
+Stream-stream joins in PySpark allow the joining of two continuously incoming data streams based on a common key. These joins are useful in real-time analytics, such as correlating logs, monitoring transactions, or detecting anomalies.
+
+## Types of Stream-Stream Joins
+PySpark supports the following types of joins in structured streaming:
+1. **Inner Join**: Returns matching records from both streams.
+2. **Left Outer Join**: Returns all records from the left stream and matching records from the right stream.
+3. **Right Outer Join**: Returns all records from the right stream and matching records from the left stream.
+4. **Full Outer Join**: Returns all records when there is a match in either stream.
+
+## Implementation of Stream-Stream Join
+
+```python
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import expr, col
+from pyspark.sql.types import StructType, StructField, StringType, TimestampType
+
+# Initialize Spark Session
+spark = SparkSession.builder.appName("StreamStreamJoins").getOrCreate()
+
+# Define schemas for two input streams
+schema1 = StructType([
+    StructField("timestamp", TimestampType(), True),
+    StructField("id", StringType(), True),
+    StructField("eventA", StringType(), True)
+])
+
+schema2 = StructType([
+    StructField("timestamp", TimestampType(), True),
+    StructField("id", StringType(), True),
+    StructField("eventB", StringType(), True)
+])
+
+# Read two streaming data sources (Example: Socket)
+stream1 = spark.readStream.format("socket").option("host", "localhost").option("port", 9998).load()
+stream2 = spark.readStream.format("socket").option("host", "localhost").option("port", 9999).load()
+
+# Parse the incoming data
+parsed_stream1 = stream1.selectExpr("CAST(value AS STRING)").selectExpr(
+    "split(value, ',')[0] AS timestamp",
+    "split(value, ',')[1] AS id",
+    "split(value, ',')[2] AS eventA"
+).withColumn("timestamp", col("timestamp").cast(TimestampType()))
+
+parsed_stream2 = stream2.selectExpr("CAST(value AS STRING)").selectExpr(
+    "split(value, ',')[0] AS timestamp",
+    "split(value, ',')[1] AS id",
+    "split(value, ',')[2] AS eventB"
+).withColumn("timestamp", col("timestamp").cast(TimestampType()))
+
+# Perform a stream-stream inner join
+joined_stream = parsed_stream1.join(
+    parsed_stream2,
+    expr("parsed_stream1.id = parsed_stream2.id AND
+          parsed_stream1.timestamp BETWEEN parsed_stream2.timestamp - interval 10 minutes AND parsed_stream2.timestamp + interval 10 minutes"),
+    "inner"
+)
+
+# Write the joined output to the console
+query = joined_stream.writeStream.outputMode("append").format("console").start()
+
+query.awaitTermination()
+```
+
+## Explanation
+- **Streaming Sources**: Two separate streams simulate continuous event data.
+- **Parsing**: Incoming data is split into structured columns.
+- **Joining Condition**: The streams are joined on `id`, ensuring events are matched within a **10-minute window**.
+- **Output Mode**: `append` mode ensures that only new matching records appear in the output.
+
+This setup can be extended for real-world use cases such as monitoring financial transactions, detecting fraud, or correlating system logs.
+

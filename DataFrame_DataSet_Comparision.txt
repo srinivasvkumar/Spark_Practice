@@ -1,0 +1,76 @@
+**Comparing DataFrame vs. Dataset in Apache Spark**
+
+## **Introduction**
+Apache Spark provides two high-level APIs for structured data processing: **DataFrame** and **Dataset**. While both leverage **Tungsten and Catalyst optimizations**, they differ in type safety, performance, and usability. This demo highlights these differences with practical examples in **Scala**.
+
+## **Setup SparkSession**
+To begin, initialize a Spark session:
+```scala
+import org.apache.spark.sql.SparkSession
+
+val spark = SparkSession.builder()
+    .appName("DataFrameVsDataset")
+    .master("local[*]")
+    .getOrCreate()
+```
+
+## **Defining a Case Class for Dataset**
+A **Dataset** is a strongly-typed version of a DataFrame, requiring a case class:
+```scala
+case class SampleData(col1: Int, col2: Int)
+```
+
+## **Creating a Sample DataFrame and Dataset**
+Generate a large dataset and convert it into both **DataFrame** and **Dataset**:
+```scala
+import scala.util.Random
+import spark.implicits._
+
+val data = (1 to 1000000).map(_ => (Random.nextInt(100), Random.nextInt(100)))
+val df = data.toDF("col1", "col2")
+val ds = data.map(x => SampleData(x._1, x._2)).toDS()
+```
+
+## **Aggregation: DataFrame vs. Dataset**
+### **Using DataFrame API**
+```scala
+import org.apache.spark.sql.functions._
+
+val dfStart = System.nanoTime()
+df.groupBy("col1").agg(sum("col2")).show()
+println(s"DataFrame Execution Time: ${(System.nanoTime() - dfStart) / 1e9} seconds")
+```
+
+### **Using Dataset API (Typed Operations)**
+```scala
+val dsStart = System.nanoTime()
+ds.groupByKey(_.col1)
+  .mapValues(_.col2)
+  .reduceGroups(_ + _)
+  .show()
+
+println(s"Dataset Execution Time: ${(System.nanoTime() - dsStart) / 1e9} seconds")
+```
+
+## **Execution Plan Comparison**
+To analyze performance optimizations:
+```scala
+df.explain(true)
+ds.explain(true)
+```
+
+## **Comparison Table**
+| Feature | **DataFrame** | **Dataset** |
+|---------|-------------|-------------|
+| **Type Safety** | No | Yes (Uses case classes) |
+| **Performance** | Faster (Optimized via Tungsten) | Slightly slower (Serialization overhead) |
+| **Ease of Use** | More SQL-like | Requires transformations |
+| **Tungsten & Catalyst Optimizations** | Yes | Yes, but with serialization costs |
+
+## **Key Takeaways**
+- **DataFrames** are generally **faster** due to **Tungsten optimizations** and minimal serialization overhead.
+- **Datasets** provide **type safety** and **functional transformations**, which are useful for compile-time checks but introduce **some performance overhead**.
+- If you don’t require **strong typing**, **DataFrames** are recommended for optimal performance.
+
+This demo provides a clear distinction between both APIs, allowing users to choose based on their **performance needs and type safety requirements**.
+
